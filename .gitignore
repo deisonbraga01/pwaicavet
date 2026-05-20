@@ -1,0 +1,19 @@
+# Xcode / iOS
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# CocoaPods (gerado no CI com pod install)
+src/Pods/
+
+# macOS
+.DS_Store
+
+# Cursor / IDE
+.cursor/
+assets/
