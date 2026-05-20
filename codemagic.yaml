@@ -1,8 +1,7 @@
 # CI/CD — ICA Med Vet (pacote iOS gerado pelo PWABuilder)
 # Repositório Codemagic: github.com/deisonbraga01/pwaicavet
 #
-# Antes do primeiro build, configure no painel Codemagic (aba Environment variables):
-#   APP_STORE_APPLE_ID  → ID numérico do app em App Store Connect
+# No painel: Environment variables → grupo "icamedvet_ios" → APP_STORE_APPLE_ID
 #
 # Em Teams → Integrations → App Store Connect, crie a integração e ajuste
 # o nome abaixo (padrão comum: codemagic).
@@ -17,6 +16,9 @@ workflows:
       app_store_connect: "Ica Med Vet"
 
     environment:
+      groups:
+        - icamedvet_ios
+
       ios_signing:
         distribution_type: app_store
         bundle_identifier: br.com.icamedvet
@@ -25,8 +27,7 @@ workflows:
         BUNDLE_ID: br.com.icamedvet
         XCODE_WORKSPACE: "ICA Med Vet.xcworkspace"
         XCODE_SCHEME: "ICA Med Vet"
-        # Substitua 0 pelo Apple ID do app em App Store Connect (ou use env var no painel)
-        APP_STORE_APPLE_ID: 0
+        # APP_STORE_APPLE_ID: defina só na aba Environment variables do app (não use 0 aqui)
 
       xcode: latest
       cocoapods: default
