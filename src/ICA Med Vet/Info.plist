@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Capture Audio by user request</string>
+	<string>O ICA Med Vet usa o microfone nas consultas de telemedicina veterinária por vídeo, para que você possa falar com o veterinário durante o atendimento. Por exemplo, ao testar o áudio antes de iniciar a consulta.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Track current location by user request</string>
+	<string>O ICA Med Vet pode usar sua localização apenas quando você solicitar, para facilitar serviços relacionados ao atendimento veterinário na sua região.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Capture Video by user request</string>
+	<string>O ICA Med Vet usa a câmera nas consultas de telemedicina veterinária por vídeo, para que o veterinário possa ver você e seu animal durante o atendimento. Por exemplo, na verificação de câmera antes da consulta.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

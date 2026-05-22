@@ -15,6 +15,8 @@ func createWebView(container: UIView, WKSMH: WKScriptMessageHandler, WKND: WKNav
     userContentController.add(WKSMH, name: "push-permission-state")
     userContentController.add(WKSMH, name: "push-token")
 
+    registerAppStoreComplianceScripts(contentController: userContentController)
+
     config.userContentController = userContentController
 
     config.limitsNavigationsToAppBoundDomains = true;
@@ -57,7 +59,53 @@ func createWebView(container: UIView, WKSMH: WKScriptMessageHandler, WKND: WKNav
 func setAppStoreAsReferrer(contentController: WKUserContentController) {
     let scriptSource = "document.referrer = `app-info://platform/ios-store`;"
     let script = WKUserScript(source: scriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-    contentController.addUserScript(script);
+    contentController.addUserScript(script)
+}
+
+/// Oculta ações de assinatura/compra no iOS App Store (Guideline 3.1.1).
+/// O site também deve tratar o cookie `app-platform=iOS App Store`.
+func registerAppStoreComplianceScripts(contentController: WKUserContentController) {
+    setAppStoreAsReferrer(contentController: contentController)
+
+    let scriptSource = """
+    (function() {
+      var blockedPhrases = [
+        'cancelar plano',
+        'assinar plano',
+        'contratar plano',
+        'comprar plano',
+        'adquirir plano'
+      ];
+      function shouldHide(el) {
+        var text = (el.innerText || el.textContent || '').toLowerCase().trim();
+        if (!text) { return false; }
+        return blockedPhrases.some(function(phrase) { return text.indexOf(phrase) !== -1; });
+      }
+      function hideSubscriptionActions() {
+        var nodes = document.querySelectorAll('button, a, [role="button"], input[type="submit"], input[type="button"]');
+        nodes.forEach(function(el) {
+          if (shouldHide(el)) {
+            el.style.setProperty('display', 'none', 'important');
+            el.setAttribute('aria-hidden', 'true');
+            el.setAttribute('data-hidden-ios-app-store', 'true');
+          }
+        });
+      }
+      function startObserver() {
+        hideSubscriptionActions();
+        if (!document.body) { return; }
+        var observer = new MutationObserver(hideSubscriptionActions);
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', startObserver);
+      } else {
+        startObserver();
+      }
+    })();
+    """
+    let script = WKUserScript(source: scriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+    contentController.addUserScript(script)
 }
 
 func setCustomCookie(webView: WKWebView) {
