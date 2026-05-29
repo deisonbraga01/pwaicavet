@@ -159,6 +159,7 @@ class ViewController: UIViewController, WKNavigationDelegate, UIDocumentInteract
     
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!){
         htmlIsLoaded = true
+        scheduleAppStoreCompliance(to: webView)
         
         self.setProgress(1.0, true)
         self.animateConnectionProblem(false)

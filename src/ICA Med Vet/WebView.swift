@@ -3,6 +3,121 @@ import WebKit
 import AuthenticationServices
 import SafariServices
 
+/// JavaScript injetado no WebView — substitui ajustes no WordPress (Guideline 3.1.1).
+let appStoreComplianceJavaScript = """
+(function() {
+  if (window.__iosAppStoreComplianceInstalled) {
+    window.__iosAppStoreComplianceRun && window.__iosAppStoreComplianceRun();
+    return;
+  }
+  window.__iosAppStoreComplianceInstalled = true;
+
+  var blockedPhrases = [
+    'cancelar plano',
+    'cancelar o plano',
+    'assinar plano',
+    'contratar plano',
+    'comprar plano',
+    'adquirir plano',
+    'renovar plano',
+    'upgrade de plano',
+    'finalizar compra',
+    'adicionar ao carrinho',
+    'escolher plano',
+    'mudar plano'
+  ];
+  var blockedHrefPattern = /checkout|pagamento|payment|assinatura|subscribe|subscription|carrinho|cart|add-to-cart|add_to_cart|woocommerce|\\/plano/i;
+
+  function normalize(text) {
+    return (text || '').toLowerCase().replace(/\\s+/g, ' ').trim();
+  }
+
+  function matchesBlocked(text) {
+    var normalized = normalize(text);
+    if (!normalized) { return false; }
+    return blockedPhrases.some(function(phrase) {
+      return normalized.indexOf(phrase) !== -1;
+    });
+  }
+
+  function isInteractive(el) {
+    var tag = (el.tagName || '').toUpperCase();
+    if (['BUTTON', 'A', 'INPUT', 'LABEL'].indexOf(tag) !== -1) { return true; }
+    if (el.getAttribute('role') === 'button') { return true; }
+    if (el.onclick || el.getAttribute('onclick')) { return true; }
+    var cls = (el.className || '').toString().toLowerCase();
+    return /btn|button|clickable|cta|action/.test(cls);
+  }
+
+  function removeElement(el) {
+    if (!el || el.getAttribute('data-ios-compliance-removed') === 'true') { return; }
+    el.setAttribute('data-ios-compliance-removed', 'true');
+    el.setAttribute('data-hidden-ios-app-store', 'true');
+    el.classList.add('ios-app-store-hidden');
+    el.style.setProperty('display', 'none', 'important');
+    el.style.setProperty('visibility', 'hidden', 'important');
+    el.style.setProperty('pointer-events', 'none', 'important');
+    if (el.parentNode) { el.parentNode.removeChild(el); }
+  }
+
+  function runCompliance() {
+    document.documentElement.setAttribute('data-app-platform', 'ios-app-store');
+
+    var nodes = document.querySelectorAll('button, a, [role="button"], input, label, span, div, p');
+    nodes.forEach(function(el) {
+      if (el.getAttribute('data-ios-compliance-removed') === 'true') { return; }
+      var text = el.textContent || '';
+      var normalized = normalize(text);
+      if (!matchesBlocked(text)) { return; }
+      if (isInteractive(el) || normalized.length <= 48) {
+        removeElement(el);
+      }
+    });
+
+    document.querySelectorAll('a[href]').forEach(function(el) {
+      var href = el.getAttribute('href') || '';
+      if (blockedHrefPattern.test(href)) { removeElement(el); }
+    });
+  }
+
+  window.__iosAppStoreComplianceRun = runCompliance;
+
+  if (!document.getElementById('ios-app-store-compliance')) {
+    var style = document.createElement('style');
+    style.id = 'ios-app-store-compliance';
+    style.textContent = '[data-hidden-ios-app-store="true"], .ios-app-store-hidden { display: none !important; visibility: hidden !important; pointer-events: none !important; }';
+    (document.head || document.documentElement).appendChild(style);
+  }
+
+  runCompliance();
+
+  if (document.body) {
+    var observer = new MutationObserver(runCompliance);
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true });
+  }
+
+  var passes = 0;
+  var interval = setInterval(function() {
+    runCompliance();
+    passes += 1;
+    if (passes >= 30) { clearInterval(interval); }
+  }, 500);
+})();
+"""
+
+func applyAppStoreCompliance(to webView: WKWebView) {
+    webView.evaluateJavaScript(appStoreComplianceJavaScript, completionHandler: nil)
+}
+
+func scheduleAppStoreCompliance(to webView: WKWebView) {
+    let delays: [TimeInterval] = [0, 0.4, 0.9, 1.5, 2.5, 4.0, 6.0]
+    for delay in delays {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            applyAppStoreCompliance(to: webView)
+        }
+    }
+}
+
 
 func createWebView(container: UIView, WKSMH: WKScriptMessageHandler, WKND: WKNavigationDelegate, NSO: NSObject, VC: ViewController) -> WKWebView{
 
@@ -62,78 +177,23 @@ func setAppStoreAsReferrer(contentController: WKUserContentController) {
     contentController.addUserScript(script)
 }
 
-/// Oculta ações de assinatura/compra no iOS App Store (Guideline 3.1.1).
-/// Assinaturas são vendidas apenas presencialmente ou por telefone.
-/// O site também deve tratar o cookie `app-platform=iOS App Store`.
+/// Registra scripts de compliance no WebView (sem depender do WordPress).
 func registerAppStoreComplianceScripts(contentController: WKUserContentController) {
     setAppStoreAsReferrer(contentController: contentController)
 
-    let cssScript = """
-    (function() {
-      var style = document.createElement('style');
-      style.id = 'ios-app-store-compliance';
-      style.textContent = '[data-hidden-ios-app-store="true"], .ios-app-store-hidden { display: none !important; visibility: hidden !important; pointer-events: none !important; }';
-      (document.head || document.documentElement).appendChild(style);
-      document.documentElement.setAttribute('data-app-platform', 'ios-app-store');
-    })();
-    """
-    contentController.addUserScript(
-        WKUserScript(source: cssScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+    let startScript = WKUserScript(
+        source: appStoreComplianceJavaScript,
+        injectionTime: .atDocumentStart,
+        forMainFrameOnly: false
     )
+    contentController.addUserScript(startScript)
 
-    let scriptSource = """
-    (function() {
-      var blockedPhrases = [
-        'cancelar plano',
-        'cancelar o plano',
-        'assinar plano',
-        'contratar plano',
-        'comprar plano',
-        'adquirir plano',
-        'renovar plano',
-        'upgrade de plano',
-        'finalizar compra',
-        'adicionar ao carrinho'
-      ];
-      var blockedHrefPattern = /checkout|pagamento|payment|assinatura|subscribe|subscription|carrinho|cart|add-to-cart|add_to_cart|woocommerce|\\/plano/i;
-      function hideElement(el) {
-        el.style.setProperty('display', 'none', 'important');
-        el.style.setProperty('visibility', 'hidden', 'important');
-        el.style.setProperty('pointer-events', 'none', 'important');
-        el.setAttribute('aria-hidden', 'true');
-        el.setAttribute('data-hidden-ios-app-store', 'true');
-        el.classList.add('ios-app-store-hidden');
-      }
-      function shouldHideByText(el) {
-        var text = (el.innerText || el.textContent || '').toLowerCase().replace(/\\s+/g, ' ').trim();
-        if (!text || text.length > 120) { return false; }
-        return blockedPhrases.some(function(phrase) { return text.indexOf(phrase) !== -1; });
-      }
-      function hideSubscriptionUI() {
-        var selectors = 'button, a, [role="button"], input[type="submit"], input[type="button"], label, span, div, p';
-        document.querySelectorAll(selectors).forEach(function(el) {
-          if (shouldHideByText(el)) { hideElement(el); }
-        });
-        document.querySelectorAll('a[href]').forEach(function(el) {
-          var href = el.getAttribute('href') || '';
-          if (blockedHrefPattern.test(href)) { hideElement(el); }
-        });
-      }
-      function startObserver() {
-        hideSubscriptionUI();
-        if (!document.body) { return; }
-        var observer = new MutationObserver(hideSubscriptionUI);
-        observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true });
-      }
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', startObserver);
-      } else {
-        startObserver();
-      }
-    })();
-    """
-    let script = WKUserScript(source: scriptSource, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
-    contentController.addUserScript(script)
+    let endScript = WKUserScript(
+        source: appStoreComplianceJavaScript,
+        injectionTime: .atDocumentEnd,
+        forMainFrameOnly: false
+    )
+    contentController.addUserScript(endScript)
 }
 
 func setCustomCookie(webView: WKWebView) {
