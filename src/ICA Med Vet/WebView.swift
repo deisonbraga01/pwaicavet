@@ -63,39 +63,67 @@ func setAppStoreAsReferrer(contentController: WKUserContentController) {
 }
 
 /// Oculta ações de assinatura/compra no iOS App Store (Guideline 3.1.1).
+/// Assinaturas são vendidas apenas presencialmente ou por telefone.
 /// O site também deve tratar o cookie `app-platform=iOS App Store`.
 func registerAppStoreComplianceScripts(contentController: WKUserContentController) {
     setAppStoreAsReferrer(contentController: contentController)
+
+    let cssScript = """
+    (function() {
+      var style = document.createElement('style');
+      style.id = 'ios-app-store-compliance';
+      style.textContent = '[data-hidden-ios-app-store="true"], .ios-app-store-hidden { display: none !important; visibility: hidden !important; pointer-events: none !important; }';
+      (document.head || document.documentElement).appendChild(style);
+      document.documentElement.setAttribute('data-app-platform', 'ios-app-store');
+    })();
+    """
+    contentController.addUserScript(
+        WKUserScript(source: cssScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+    )
 
     let scriptSource = """
     (function() {
       var blockedPhrases = [
         'cancelar plano',
+        'cancelar o plano',
         'assinar plano',
         'contratar plano',
         'comprar plano',
-        'adquirir plano'
+        'adquirir plano',
+        'renovar plano',
+        'upgrade de plano',
+        'finalizar compra',
+        'adicionar ao carrinho'
       ];
-      function shouldHide(el) {
-        var text = (el.innerText || el.textContent || '').toLowerCase().trim();
-        if (!text) { return false; }
+      var blockedHrefPattern = /checkout|pagamento|payment|assinatura|subscribe|subscription|carrinho|cart|add-to-cart|add_to_cart|woocommerce|\\/plano/i;
+      function hideElement(el) {
+        el.style.setProperty('display', 'none', 'important');
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+        el.setAttribute('aria-hidden', 'true');
+        el.setAttribute('data-hidden-ios-app-store', 'true');
+        el.classList.add('ios-app-store-hidden');
+      }
+      function shouldHideByText(el) {
+        var text = (el.innerText || el.textContent || '').toLowerCase().replace(/\\s+/g, ' ').trim();
+        if (!text || text.length > 120) { return false; }
         return blockedPhrases.some(function(phrase) { return text.indexOf(phrase) !== -1; });
       }
-      function hideSubscriptionActions() {
-        var nodes = document.querySelectorAll('button, a, [role="button"], input[type="submit"], input[type="button"]');
-        nodes.forEach(function(el) {
-          if (shouldHide(el)) {
-            el.style.setProperty('display', 'none', 'important');
-            el.setAttribute('aria-hidden', 'true');
-            el.setAttribute('data-hidden-ios-app-store', 'true');
-          }
+      function hideSubscriptionUI() {
+        var selectors = 'button, a, [role="button"], input[type="submit"], input[type="button"], label, span, div, p';
+        document.querySelectorAll(selectors).forEach(function(el) {
+          if (shouldHideByText(el)) { hideElement(el); }
+        });
+        document.querySelectorAll('a[href]').forEach(function(el) {
+          var href = el.getAttribute('href') || '';
+          if (blockedHrefPattern.test(href)) { hideElement(el); }
         });
       }
       function startObserver() {
-        hideSubscriptionActions();
+        hideSubscriptionUI();
         if (!document.body) { return; }
-        var observer = new MutationObserver(hideSubscriptionActions);
-        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        var observer = new MutationObserver(hideSubscriptionUI);
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true });
       }
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', startObserver);
@@ -182,6 +210,11 @@ extension ViewController: WKUIDelegate, WKDownloadDelegate {
 
                 let matchingHostOrigin = allowedOrigins.first(where: { requestHost.range(of: $0) != nil })
                 if (matchingHostOrigin != nil) {
+                    if isBlockedSubscriptionURL(requestUrl) {
+                        decisionHandler(.cancel)
+                        presentSubscriptionBlockedNotice()
+                        return
+                    }
                     // Open in main webview
                     decisionHandler(.allow)
                     if (!toolbarView.isHidden) {

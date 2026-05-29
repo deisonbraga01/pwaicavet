@@ -54,6 +54,16 @@ class ViewController: UIViewController, WKNavigationDelegate, UIDocumentInteract
     @objc func keyboardWillHide(_ notification: NSNotification) {
         ICAMedVet.webView.setNeedsLayout()
     }
+
+    func presentSubscriptionBlockedNotice() {
+        let alert = UIAlertController(
+            title: "Assinatura",
+            message: "Planos são contratados apenas em pontos de venda autorizados ou por telefone. Este app é apenas para acesso de assinantes já ativos.",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+    }
     
     func initWebView() {
         ICAMedVet.webView = createWebView(container: webviewView, WKSMH: self, WKND: self, NSO: self, VC: self)

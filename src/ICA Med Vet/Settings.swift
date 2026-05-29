@@ -27,3 +27,28 @@ let adaptiveUIStyle = true     // iOS 15+ only. Change app theme on the fly to d
 let overrideStatusBar = false   // iOS 13-14 only. if you don't support dark/light system theme.
 let statusBarTheme = "dark"    // dark / light, related to override option.
 let pullToRefresh = true    // Enable/disable pull down to refresh page
+
+// Guideline 3.1.1 — bloqueia rotas de compra/assinatura dentro do WebView (App Store).
+let blockedSubscriptionPathPatterns: [String] = [
+    "/checkout",
+    "/cart",
+    "/carrinho",
+    "/pagamento",
+    "/payment",
+    "/assinatura",
+    "/assinaturas",
+    "/subscribe",
+    "/subscription",
+    "/planos",
+    "/plano/",
+    "add-to-cart",
+    "add_to_cart",
+    "woocommerce/checkout"
+]
+
+func isBlockedSubscriptionURL(_ url: URL) -> Bool {
+    let path = url.path.lowercased()
+    let query = (url.query ?? "").lowercased()
+    let combined = "\(path)?\(query)"
+    return blockedSubscriptionPathPatterns.contains { combined.contains($0) }
+}
